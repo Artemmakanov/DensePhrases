@@ -2,8 +2,7 @@ from pathlib import Path
 parent_dir = Path(__file__).parent.parent
 
 
-from transformers import AutoTokenizer
-from transformers import AutoModel
+from transformers import AutoTokenizer, AutoModel
 from typing import List
 import torch
 
