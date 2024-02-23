@@ -8,16 +8,14 @@ import numpy as np
 from tqdm import tqdm
 import faiss
 
+import re
 
 
 
 class Dump:
-    def __init__(self, ds, model, model_1, model_2, hidden_dim=264):
+    def __init__(self, ds, model, model_1, model_2, tokenizer, hidden_dim=264):
         self.hidden_dim = hidden_dim
-        
-        model_checkpoint = "DeepPavlov/distilrubert-tiny-cased-conversational-v1"
-        self.tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
-
+        self.tokenizer = tokenizer
         self.model = model
         self.model_1 = model_1
         self.model_2 = model_2
@@ -25,10 +23,17 @@ class Dump:
 
     def create_dump(self):
         token_id2cnt = defaultdict(int)
-        token_id2j = {}
-        j = 0
+        self.token_w_id2context_id = {}
+        self.token_w_id2token_id = {}
+        self.context_id2id = {}
+        token_w_id = 0
         
-        for context in tqdm(self.ds.contexts):
+        contexts_unique = list(set(self.ds.contexts))
+        for context_id, context_unique in enumerate(contexts_unique):
+            self.context_id2id[context_id] = contexts_unique.index(context_unique)
+        
+        
+        for context_id, context in enumerate(tqdm(contexts_unique, desc='Creating Phrase dump')):
             input_ids = self.tokenizer(context, truncation=True, max_length=512, return_tensors="pt")
             last_hidden_state = self.model(**input_ids).last_hidden_state[0].detach().numpy()
             for token_num, token_id in enumerate(input_ids['input_ids'][0]):
@@ -36,21 +41,17 @@ class Dump:
                     last_hidden_state_token = last_hidden_state[token_num].reshape((1, self.hidden_dim))
                     
                     token_id = token_id.item()
-                    if token_id in token_id2j:
-                        H[token_id2j[token_id]] += last_hidden_state_token[0]
+                    
+                    if token_w_id == 0:
+                        H = last_hidden_state_token
                     else:
-                        if j == 0:
-                            H = last_hidden_state_token
-                        else:
-                            print(last_hidden_state_token.shape, H.shape)
-                            j += 1
-                            H = np.vstack((H, last_hidden_state_token))
-                        token_id2j[token_id] = j
+                        token_w_id += 1
+                        H = np.vstack((H, last_hidden_state_token))
                             
                     token_id2cnt[token_id] += 1
+                    self.token_w_id2context_id[token_w_id] = context_id
+                    self.token_w_id2token_id[token_w_id] = token_id
                 
-        for token_id, cnt in token_id2cnt.items():
-            H[token_id2j[token_id]] = H[token_id2j[token_id]] / cnt
         self.index = faiss.IndexFlatIP(self.hidden_dim)
         self.index.add(H)
         self.H = H
@@ -64,23 +65,33 @@ class Dump:
             print(f"C: {context}")
 
         input_ids = self.tokenizer(question, truncation=True, max_length=512, return_tensors="pt")
-        last_hidden_state_1 = self.model_1(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
-        last_hidden_state_2 = self.model_2(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
-        S_1, I_1 = self.index.search(last_hidden_state_1, k)
-        S_2, I_2 = self.index.search(last_hidden_state_2, k)
+        last_hidden_state_left = self.model_1(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
+        last_hidden_state_right = self.model_2(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
+        S_start, I_start = self.index.search(last_hidden_state_left, k)
+        S_end, I_end = self.index.search(last_hidden_state_right, k)
         
-        context_ids =  self.tokenizer(context)['input_ids']
+        
         
         answer_candidate2cumscore = {}
-        for num_i_1, i_1 in enumerate(I_1[0]):
-            for num_i_2, i_2 in enumerate(I_2[0]):
-                if i_1 in context_ids and i_2 in context_ids:
-                    start_index = context_ids.index(i_1)
-                    end_index = context_ids.index(i_2)
-                    if start_index <= end_index:
-                        answer_candidate_ids = context_ids[start_index:end_index]
-                        answer_candidate = self.tokenizer.decode(answer_candidate_ids)
-                        answer_candidate2cumscore[answer_candidate] = S_1[0][num_i_1] + S_2[0][num_i_2]
+        for s_start, token_w_id_start in zip(S_start[0], I_start[0]):
+            for s_end, token_w_id_end in zip(S_end[0], I_end[0]):
+                context_id_candidate_start = self.token_w_id2context_id[token_w_id_start]
+                context_id_candidate_end = self.token_w_id2context_id[token_w_id_end]
+                if context_id_candidate_start == context_id_candidate_end:
+                    
+                    token_id_start = self.token_w_id2token_id[token_w_id_start]
+                    token_id_end = self.token_w_id2token_id[token_w_id_end]
+                    
+                    context = self.ds.contexts[self.context_id2id[context_id_candidate_start]]
+                    context_ids = self.tokenizer(context)['input_ids']
+                    
+                    if token_id_start in context_ids and end_index in context_ids:
+                        start_index = context_ids.index(token_id_start)
+                        end_index = context_ids.index(token_id_end)
+                        if start_index <= end_index:
+                            answer_candidate_ids = context_ids[start_index:end_index]
+                            answer_candidate = self.tokenizer.decode(answer_candidate_ids)
+                            answer_candidate2cumscore[answer_candidate] = s_start + s_end
                         
         if answer_candidate2cumscore:
             answer, score = sorted(answer_candidate2cumscore.items(), key=lambda x: -x[1])[0]

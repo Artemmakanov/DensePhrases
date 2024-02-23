@@ -9,12 +9,11 @@ import torch
 from tqdm import tqdm
 
 class PhraseModel(torch.nn.Module):
-    def __init__(self, hidden_dim, ds):
+    def __init__(self, hidden_dim, ds, model_checkpoint):
         super(PhraseModel, self).__init__()
 
         self.hidden_dim = hidden_dim
         
-        model_checkpoint = "DeepPavlov/distilrubert-tiny-cased-conversational-v1"
         self.tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 
         self.model = AutoModel.from_pretrained(model_checkpoint)
