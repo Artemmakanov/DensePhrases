@@ -45,9 +45,10 @@ class Dump:
                         H = last_hidden_state_token
                     else:
                         H = np.vstack((H, last_hidden_state_token))
-                    token_w_id += 1     
+                        
                     self.token_w_id2context_id[token_w_id] = context_id
                     self.token_w_id2token_id[token_w_id] = token_id
+                    token_w_id += 1 
                 
         self.index = faiss.IndexFlatIP(self.hidden_dim)
         self.index.add(H)
