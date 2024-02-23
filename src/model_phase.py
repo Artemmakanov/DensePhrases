@@ -39,6 +39,7 @@ class PhraseModel(torch.nn.Module):
         start_token_indices = self.ds.get_spans_input_ids(ids, pos='start')
         end_token_indices = self.ds.get_spans_input_ids(ids, pos='end')
         loss = torch.Tensor([0.]).to(self.device)
+        eps = torch.Tensor([1e-5]).to(self.device)
         # print(f"context_num_tokens {context_num_tokens}")
         # print(f"last_hidden_state.shape {last_hidden_state.shape}")
         # print(f"q_start.shape {q_start.shape}")
@@ -49,11 +50,11 @@ class PhraseModel(torch.nn.Module):
             
             z_start = torch.matmul(last_hidden_state[n], q_start[n].T).reshape(context_num_tokens)
             P_start = self.softmax(z_start)
-            loss_start = torch.log(P_start[start_token_indices[n]])
+            loss_start = torch.log(P_start[start_token_indices[n]] + eps)
             
             z_end = torch.matmul(last_hidden_state[n], q_end[n].T).reshape(context_num_tokens)
             P_end = self.softmax(z_end)
-            loss_end = torch.log(P_end[end_token_indices[n]])
+            loss_end = torch.log(P_end[end_token_indices[n]] + eps)
             
             loss += (loss_start + loss_end) / 2
 
