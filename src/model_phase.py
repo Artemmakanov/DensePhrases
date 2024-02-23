@@ -31,7 +31,7 @@ class PhraseModel(torch.nn.Module):
         question_ids = self.tokenizer(self.ds.get_questions(ids), 
                                       truncation=True, max_length=512, 
                                       return_tensors="pt", padding=True).to(self.device)
-        last_hidden_state = self.model(**context_ids).last_hidden_state
+        last_hidden_state = self.model(**context_ids).last_hidden_state[1:-1]
         
         N, context_num_tokens, _ = last_hidden_state.shape
         q_start = self.model_1(**question_ids).last_hidden_state[:, 0]

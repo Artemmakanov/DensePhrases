@@ -53,6 +53,8 @@ class Dump:
         self.index = faiss.IndexFlatIP(self.hidden_dim)
         self.index.add(H)
         self.H = H
+        size, hiiden = H.shape
+        self.size = len(self.ds.contexts)
 
     def predict(self, id, k=100, verbose=False, L=30):
         question = self.ds.questions[id]
@@ -99,10 +101,11 @@ class Dump:
             answer = re.sub(r'#', '', answer)
             return answer, start_index, end_index, score
         else:
-            return '',  0.
+            return '',  -1, -1, 0.
 
     def evaluate(self, k=100):
         tp_string, tp_start_id, tp_end_id = 0, 0, 0
+        delta_start_normalized, delta_end_normalized = 0, 0
         for id in tqdm(range(self.size)):
             answer, start_index, end_index, score = self.predict(id, k)
             if answer == self.ds.answers[id]:
@@ -113,9 +116,16 @@ class Dump:
                 
             if end_index == self.ds.spans_input_ids[id]['end']:
                 tp_end_id += 1
+                
+            delta_start_normalized += abs(start_index - self.ds.spans_input_ids[id]['start']) / len(self.ds.contexts[id])
+            delta_end_normalized += abs(end_index - self.ds.spans_input_ids[id]['end']) / len(self.ds.contexts[id])
+                
+            
         return {
             "em_string": tp_string / self.size, 
             "em_start": tp_start_id / self.size,
             "em_end": tp_end_id / self.size,
+            "delta_start_normalized": delta_start_normalized  / self.size,
+            "delta_end_normalized": delta_end_normalized / self.size
         }
 
