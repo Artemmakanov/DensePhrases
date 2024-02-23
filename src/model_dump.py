@@ -40,8 +40,6 @@ class Dump:
                 if not token_id in self.tokenizer.added_tokens_decoder.keys(): 
                     last_hidden_state_token = last_hidden_state[token_num].reshape((1, self.hidden_dim))
                     
-                    
-                    
                     if token_w_id == 0:
                         H = last_hidden_state_token
                     else:

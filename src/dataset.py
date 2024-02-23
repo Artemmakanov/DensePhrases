@@ -5,17 +5,17 @@ parent_dir = Path(__file__).parent.parent
 from transformers import AutoTokenizer
 from tqdm import tqdm
 from typing import List
+import re
 
 class Dataset:
     
-    def __init__(self) -> None:
+    def __init__(self, model_checkpoint) -> None:
         
         self.ids = []
         self.contexts = []
         self.questions = []
         self.answers = []
         self.spans_input_ids = []
-        model_checkpoint = "DeepPavlov/distilrubert-tiny-cased-conversational-v1"
         self.tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
     
     def get_contexts(self, indices: List[int]):
@@ -40,22 +40,31 @@ class Dataset:
         else:
             treshold = len(contexts)
         for i in tqdm(range(treshold)):
-            try:
-                answer_tokenized = self.tokenizer(answers[i]['text'][0])['input_ids'][1:]
-                context_tokenized = self.tokenizer(contexts[i])['input_ids'][1:]
-                start = context_tokenized.index(answer_tokenized[0])
-                end = context_tokenized.index(answer_tokenized[-1])
-                if start < 512 and end < 512:
-                    self.spans_input_ids.append({
-                        'start':start,
-                        'end': end
-                    })
+            context = contexts[i]
+            answer = answers[i]["text"][0]
+
+            answer_tokenized = self.tokenizer(answer)['input_ids'][1:-1]
+            context_tokenized = self.tokenizer(context)['input_ids'][1:-1]
                     
-                    self.contexts.append(contexts[i])
-                    self.questions.append(questions[i])
-                    self.answers.append(answers[i]['text'])
-                    
-                    self.ids.append(id)
-                    id += 1
-            except:
-                None
+            for context_start_token in range(len(context_tokenized) - len(answer_tokenized)):
+                
+                if answer_tokenized == context_tokenized[context_start_token:context_start_token+len(answer_tokenized)]:
+                    break
+                context_start_token += 1
+
+            
+            context_end_token = context_start_token + len(answer_tokenized)
+
+            if context_start_token < 512 and context_end_token < 512: 
+                self.spans_input_ids.append({
+                    'start':context_start_token,
+                    'end': context_end_token
+                })
+                
+                self.contexts.append(contexts[i])
+                self.questions.append(questions[i])
+                self.answers.append(answer)
+
+                self.ids.append(id)
+                id += 1
+           
