@@ -38,7 +38,7 @@ class PhraseModel(torch.nn.Module):
         q_end = self.model_2(**question_ids).last_hidden_state[:, 0]
         start_token_indices = self.ds.get_spans_input_ids(ids, pos='start')
         end_token_indices = self.ds.get_spans_input_ids(ids, pos='end')
-        loss = torch.Tensor([0.])
+        loss = torch.Tensor([0.]).to(self.device)
         # print(f"context_num_tokens {context_num_tokens}")
         # print(f"last_hidden_state.shape {last_hidden_state.shape}")
         # print(f"q_start.shape {q_start.shape}")
