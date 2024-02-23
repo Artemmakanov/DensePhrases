@@ -9,16 +9,17 @@ import torch
 from tqdm import tqdm
 
 class PhraseModel(torch.nn.Module):
-    def __init__(self, hidden_dim, ds, model_checkpoint):
+    def __init__(self, hidden_dim, ds, model_checkpoint, device):
         super(PhraseModel, self).__init__()
 
+        self.device = device
         self.hidden_dim = hidden_dim
         
         self.tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 
-        self.model = AutoModel.from_pretrained(model_checkpoint)
-        self.model_1 = AutoModel.from_pretrained(model_checkpoint)
-        self.model_2 = AutoModel.from_pretrained(model_checkpoint)
+        self.model = AutoModel.from_pretrained(model_checkpoint).to(self.device)
+        self.model_1 = AutoModel.from_pretrained(model_checkpoint).to(self.device)
+        self.model_2 = AutoModel.from_pretrained(model_checkpoint).to(self.device)
         self.ds = ds
         self.softmax = torch.nn.Softmax()
         
@@ -26,10 +27,10 @@ class PhraseModel(torch.nn.Module):
     def forward(self, ids: List[int]):
         context_ids = self.tokenizer(self.ds.get_contexts(ids), 
                                      truncation=True, max_length=512, 
-                                     return_tensors="pt", padding=True)
+                                     return_tensors="pt", padding=True).to(self.device)
         question_ids = self.tokenizer(self.ds.get_questions(ids), 
                                       truncation=True, max_length=512, 
-                                      return_tensors="pt", padding=True)
+                                      return_tensors="pt", padding=True).to(self.device)
         last_hidden_state = self.model(**context_ids).last_hidden_state
         
         N, context_num_tokens, _ = last_hidden_state.shape
