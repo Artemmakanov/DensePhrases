@@ -29,7 +29,7 @@ class QueryModel(torch.nn.Module):
         self.myparameters = torch.nn.ParameterList()
         self.myparameters.extend([dump.model_start, dump.model_end])
 
-        self.H = torch.Tensor(dump.H)
+        self.H = torch.Tensor(dump.H).to(device)
         self.ds = ds
         self.L = L
         self.device = device
@@ -50,8 +50,8 @@ class QueryModel(torch.nn.Module):
         for n in range(N):
 
 
-            I_start = np.argsort(-dot_start[n].detach().numpy())[:self.k]
-            I_end = np.argsort(-dot_end[n].detach().numpy())[:self.k]
+            I_start = np.argsort(-dot_start[n].cpu().detach().numpy())[:self.k]
+            I_end = np.argsort(-dot_end[n].cpu().detach().numpy())[:self.k]
 
             S_start = dot_start[n][I_start]
             S_end = dot_end[n][I_end]
