@@ -24,6 +24,9 @@ class Dataset:
     def get_contexts(self, indices: List[int]):
         return [self.contexts[id] for id in indices]
     
+    def get_answers(self, indices: List[int]):
+        return [self.answers[id] for id in indices]
+    
     def get_questions(self, indices: List[int]):
         return [self.questions[id] for id in indices]
     
@@ -34,9 +37,9 @@ class Dataset:
     def load_ds(self, raw_datasets, size=100):
 
         id = 0
-        contexts = raw_datasets['train']['context'] + raw_datasets['validation']['context']
-        questions = raw_datasets['train']['question'] + raw_datasets['validation']['question']
-        answers = raw_datasets['train']['answers'] + raw_datasets['validation']['answers']
+        contexts = raw_datasets['context']
+        questions = raw_datasets['question']
+        answers = raw_datasets['answers']
         if size:
             treshold = size
             self.size = size

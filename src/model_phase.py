@@ -18,8 +18,8 @@ class PhraseModel(torch.nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 
         self.model = AutoModel.from_pretrained(model_checkpoint).to(self.device)
-        self.model_1 = AutoModel.from_pretrained(model_checkpoint).to(self.device)
-        self.model_2 = AutoModel.from_pretrained(model_checkpoint).to(self.device)
+        self.model_start = AutoModel.from_pretrained(model_checkpoint).to(self.device)
+        self.model_end = AutoModel.from_pretrained(model_checkpoint).to(self.device)
         self.ds = ds
         self.softmax = torch.nn.Softmax()
         
@@ -34,8 +34,8 @@ class PhraseModel(torch.nn.Module):
         last_hidden_state = self.model(**context_ids).last_hidden_state[1:-1]
         
         N, context_num_tokens, _ = last_hidden_state.shape
-        q_start = self.model_1(**question_ids).last_hidden_state[:, 0]
-        q_end = self.model_2(**question_ids).last_hidden_state[:, 0]
+        q_start = self.model_start(**question_ids).last_hidden_state[:, 0]
+        q_end = self.model_end(**question_ids).last_hidden_state[:, 0]
         start_token_indices = self.ds.get_spans_input_ids(ids, pos='start')
         end_token_indices = self.ds.get_spans_input_ids(ids, pos='end')
         loss = torch.Tensor([0.]).to(self.device)

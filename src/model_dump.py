@@ -13,12 +13,12 @@ import re
 
 
 class Dump:
-    def __init__(self, ds, model, model_1, model_2, tokenizer, hidden_dim=264, device='cuda'):
+    def __init__(self, ds, model, model_start, model_end, tokenizer, hidden_dim=768, device='cuda'):
         self.hidden_dim = hidden_dim
         self.tokenizer = tokenizer
         self.model = model
-        self.model_1 = model_1
-        self.model_2 = model_2
+        self.model_start = model_start
+        self.model_end = model_end
         self.ds = ds            
         self.device = device
 
@@ -56,76 +56,53 @@ class Dump:
         size, hiiden = H.shape
         self.size = len(self.ds.contexts)
 
-    def predict(self, id, k=100, verbose=False, L=30):
-        question = self.ds.questions[id]
-        answer = self.ds.answers[id]
-        context = self.ds.contexts[id]
+    def predict(self, ids, k=100, verbose=False, L=30):
+        N = len(ids)
+        questions = self.ds.get_questions(ids)
+        contexts = self.ds.get_contexts(ids)
         if verbose:
-            print(f"Q: {question}")
-            print(f"C: {context}")
+            print(f"Q: {questions}")
+            print(f"C: {contexts}")
 
-        input_ids = self.tokenizer(question, truncation=True, max_length=512, return_tensors="pt").to(self.device)
-        last_hidden_state_start = self.model_1(**input_ids).last_hidden_state.detach().cpu().numpy()[0][0].reshape((1, self.hidden_dim))
-        last_hidden_state_end = self.model_2(**input_ids).last_hidden_state.detach().cpu().numpy()[0][0].reshape((1, self.hidden_dim))
+        input_ids = self.tokenizer(questions, truncation=True, max_length=512, padding=True, return_tensors="pt").to(self.device)
+        last_hidden_state_start = self.model_start(**input_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
+        last_hidden_state_end = self.model_end(**input_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
         S_start, I_start = self.index.search(last_hidden_state_start, k)
         S_end, I_end = self.index.search(last_hidden_state_end, k)
         
         
-        
-        answer_candidate2cumscore = {}
-        for s_start, token_w_id_start in zip(S_start[0], I_start[0]):
-            for s_end, token_w_id_end in zip(S_end[0], I_end[0]):
-                context_id_candidate_start = self.token_w_id2context_id[token_w_id_start]
-                context_id_candidate_end = self.token_w_id2context_id[token_w_id_end]
-                if context_id_candidate_start == context_id_candidate_end:
-                    
-                    token_id_start = self.token_w_id2token_id[token_w_id_start]
-                    token_id_end = self.token_w_id2token_id[token_w_id_end]
-                    
-                    context = self.ds.contexts[self.context_id2id[context_id_candidate_start]]
-                    context_ids = self.tokenizer(context)['input_ids']
-                    
-                    if token_id_start in context_ids and token_id_end in context_ids:
-                        start_index = context_ids.index(token_id_start)
-                        end_index = context_ids.index(token_id_end)
-                        if start_index <= end_index <= start_index + L:
-                            answer_candidate_ids = context_ids[start_index:end_index]
-                            answer_candidate = self.tokenizer.decode(answer_candidate_ids)
-                            answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
-                            
-                    
+        answers, start_indices, end_indices, scores = [], [], [], []
+        for n in range(N):
+            answer_candidate2cumscore = {}
+            for s_start, token_w_id_start in zip(S_start[n], I_start[n]):
+                for s_end, token_w_id_end in zip(S_end[n], I_end[n]):
+                    context_id_candidate_start = self.token_w_id2context_id[token_w_id_start]
+                    context_id_candidate_end = self.token_w_id2context_id[token_w_id_end]
+                    if context_id_candidate_start == context_id_candidate_end:
                         
-        if answer_candidate2cumscore:
-            answer, score = sorted(answer_candidate2cumscore.items(), key=lambda x: -x[1])[0]
-            start_index, end_index, answer = answer
-            answer = re.sub(r'#', '', answer)
-            return answer, start_index, end_index, score
-        else:
-            return '',  -1, -1, 0.
-
-    def evaluate(self, k=100):
-        tp_string, tp_start_id, tp_end_id = 0, 0, 0
-        delta_start_normalized, delta_end_normalized = 0, 0
-        for id in tqdm(range(self.size)):
-            answer, start_index, end_index, score = self.predict(id, k)
-            if answer == self.ds.answers[id]:
-                tp_string += 1
-                
-            if start_index == self.ds.spans_input_ids[id]['start']:
-                tp_start_id += 1
-                
-            if end_index == self.ds.spans_input_ids[id]['end']:
-                tp_end_id += 1
-                
-            delta_start_normalized += abs(start_index - self.ds.spans_input_ids[id]['start']) / len(self.ds.contexts[id])
-            delta_end_normalized += abs(end_index - self.ds.spans_input_ids[id]['end']) / len(self.ds.contexts[id])
-                
-            
-        return {
-            "em_string": tp_string / self.size, 
-            "em_start": tp_start_id / self.size,
-            "em_end": tp_end_id / self.size,
-            "delta_start_normalized": delta_start_normalized  / self.size,
-            "delta_end_normalized": delta_end_normalized / self.size
-        }
+                        token_id_start = self.token_w_id2token_id[token_w_id_start]
+                        token_id_end = self.token_w_id2token_id[token_w_id_end]
+                        
+                        context = self.ds.contexts[self.context_id2id[context_id_candidate_start]]
+                        context_ids = self.tokenizer(context)['input_ids']
+                        
+                        if token_id_start in context_ids and token_id_end in context_ids:
+                            start_index = context_ids.index(token_id_start)
+                            end_index = context_ids.index(token_id_end)
+                            if start_index <= end_index <= start_index + L:
+                                answer_candidate_ids = context_ids[start_index:end_index]
+                                answer_candidate = self.tokenizer.decode(answer_candidate_ids)
+                                answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
+                                
+                        
+            if answer_candidate2cumscore:
+                answer, score = sorted(answer_candidate2cumscore.items(), key=lambda x: -x[1])[0]
+                start_index, end_index, answer = answer
+                answers.append(re.sub(r'#', '', answer))
+                start_indices.append(start_index)
+                end_indices.append(end_index)
+                scores.append(score)
+        return answers, start_indices, end_indices, scores
+        
+    
 
