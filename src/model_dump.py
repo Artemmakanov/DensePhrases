@@ -13,13 +13,14 @@ import re
 
 
 class Dump:
-    def __init__(self, ds, model, model_1, model_2, tokenizer, hidden_dim=264):
+    def __init__(self, ds, model, model_1, model_2, tokenizer, hidden_dim=264, device='cuda'):
         self.hidden_dim = hidden_dim
         self.tokenizer = tokenizer
         self.model = model
         self.model_1 = model_1
         self.model_2 = model_2
         self.ds = ds            
+        self.device = device
 
     def create_dump(self):
         self.token_w_id2context_id = {}
@@ -33,8 +34,8 @@ class Dump:
         
         
         for context_id, context in enumerate(tqdm(contexts_unique, desc='Creating Phrase dump')):
-            input_ids = self.tokenizer(context, truncation=True, max_length=512, return_tensors="pt")
-            last_hidden_state = self.model(**input_ids).last_hidden_state[0].detach().numpy()
+            input_ids = self.tokenizer(context, truncation=True, max_length=512, return_tensors="pt").to(self.device)
+            last_hidden_state = self.model(**input_ids).last_hidden_state[0].detach().cpu().numpy()
             for token_num, token_id in enumerate(input_ids['input_ids'][0]):
                 token_id = token_id.item()
                 if not token_id in self.tokenizer.added_tokens_decoder.keys(): 
@@ -61,9 +62,9 @@ class Dump:
             print(f"Q: {question}")
             print(f"C: {context}")
 
-        input_ids = self.tokenizer(question, truncation=True, max_length=512, return_tensors="pt")
-        last_hidden_state_start = self.model_1(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
-        last_hidden_state_end = self.model_2(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
+        input_ids = self.tokenizer(question, truncation=True, max_length=512, return_tensors="pt").to(self.device)
+        last_hidden_state_start = self.model_1(**input_ids).last_hidden_state.detach().cpu().numpy()[0][0].reshape((1, self.hidden_dim))
+        last_hidden_state_end = self.model_2(**input_ids).last_hidden_state.detach().cpu().numpy()[0][0].reshape((1, self.hidden_dim))
         S_start, I_start = self.index.search(last_hidden_state_start, k)
         S_end, I_end = self.index.search(last_hidden_state_end, k)
         

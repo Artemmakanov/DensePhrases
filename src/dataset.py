@@ -16,6 +16,9 @@ class Dataset:
         self.questions = []
         self.answers = []
         self.spans_input_ids = []
+        self.context_embeddings = []
+        self.answer_embeddings = []
+        self.question_embeddings = []
         self.tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
     
     def get_contexts(self, indices: List[int]):
