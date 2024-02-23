@@ -89,22 +89,33 @@ class Dump:
                         if start_index <= end_index <= start_index + L:
                             answer_candidate_ids = context_ids[start_index:end_index]
                             answer_candidate = self.tokenizer.decode(answer_candidate_ids)
-                            answer_candidate2cumscore[answer_candidate] = s_start + s_end
+                            answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
                             
                     
                         
         if answer_candidate2cumscore:
             answer, score = sorted(answer_candidate2cumscore.items(), key=lambda x: -x[1])[0]
+            start_index, end_index, answer = answer
             answer = re.sub(r'#', '', answer)
-            return answer, score
+            return answer, start_index, end_index, score
         else:
             return '',  0.
 
     def evaluate(self, k=100):
-        tp = 0
+        tp_string, tp_start_id, tp_end_id = 0, 0, 0
         for id in tqdm(range(self.size)):
-            answer, score = self.predict(id, k)
+            answer, start_index, end_index, score = self.predict(id, k)
             if answer == self.ds.answers[id]:
-                tp += 1
-        return tp / self.size
+                tp_string += 1
+                
+            if start_index == self.ds.spans_input_ids[id]['start']:
+                tp_start_id += 1
+                
+            if end_index == self.ds.spans_input_ids[id]['end']:
+                tp_end_id += 1
+        return {
+            "em_string": tp_string / self.size, 
+            "em_start": tp_start_id / self.size,
+            "em_end": tp_end_id / self.size,
+        }
 
