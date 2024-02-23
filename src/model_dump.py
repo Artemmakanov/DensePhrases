@@ -36,10 +36,11 @@ class Dump:
             input_ids = self.tokenizer(context, truncation=True, max_length=512, return_tensors="pt")
             last_hidden_state = self.model(**input_ids).last_hidden_state[0].detach().numpy()
             for token_num, token_id in enumerate(input_ids['input_ids'][0]):
+                token_id = token_id.item()
                 if not token_id in self.tokenizer.added_tokens_decoder.keys(): 
                     last_hidden_state_token = last_hidden_state[token_num].reshape((1, self.hidden_dim))
                     
-                    token_id = token_id.item()
+                    
                     
                     if token_w_id == 0:
                         H = last_hidden_state_token
@@ -54,7 +55,7 @@ class Dump:
         self.index.add(H)
         self.H = H
 
-    def predict(self, id, k=100, verbose=False):
+    def predict(self, id, k=100, verbose=False, L=30):
         question = self.ds.questions[id]
         answer = self.ds.answers[id]
         context = self.ds.contexts[id]
@@ -75,10 +76,8 @@ class Dump:
             for s_end, token_w_id_end in zip(S_end[0], I_end[0]):
                 context_id_candidate_start = self.token_w_id2context_id[token_w_id_start]
                 context_id_candidate_end = self.token_w_id2context_id[token_w_id_end]
-                print(context_id_candidate_start, context_id_candidate_end)
                 if context_id_candidate_start == context_id_candidate_end:
                     
-                    print()
                     token_id_start = self.token_w_id2token_id[token_w_id_start]
                     token_id_end = self.token_w_id2token_id[token_w_id_end]
                     
@@ -88,10 +87,12 @@ class Dump:
                     if token_id_start in context_ids and token_id_end in context_ids:
                         start_index = context_ids.index(token_id_start)
                         end_index = context_ids.index(token_id_end)
-                        if start_index <= end_index:
+                        if start_index <= end_index <= start_index + L:
                             answer_candidate_ids = context_ids[start_index:end_index]
                             answer_candidate = self.tokenizer.decode(answer_candidate_ids)
                             answer_candidate2cumscore[answer_candidate] = s_start + s_end
+                            
+                    
                         
         if answer_candidate2cumscore:
             answer, score = sorted(answer_candidate2cumscore.items(), key=lambda x: -x[1])[0]
