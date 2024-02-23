@@ -22,7 +22,6 @@ class Dump:
         self.ds = ds            
 
     def create_dump(self):
-        token_id2cnt = defaultdict(int)
         self.token_w_id2context_id = {}
         self.token_w_id2token_id = {}
         self.context_id2id = {}
@@ -30,7 +29,7 @@ class Dump:
         
         contexts_unique = list(set(self.ds.contexts))
         for context_id, context_unique in enumerate(contexts_unique):
-            self.context_id2id[context_id] = contexts_unique.index(context_unique)
+            self.context_id2id[context_id] = self.ds.contexts.index(context_unique)
         
         
         for context_id, context in enumerate(tqdm(contexts_unique, desc='Creating Phrase dump')):
@@ -45,10 +44,8 @@ class Dump:
                     if token_w_id == 0:
                         H = last_hidden_state_token
                     else:
-                        token_w_id += 1
                         H = np.vstack((H, last_hidden_state_token))
-                            
-                    token_id2cnt[token_id] += 1
+                    token_w_id += 1     
                     self.token_w_id2context_id[token_w_id] = context_id
                     self.token_w_id2token_id[token_w_id] = token_id
                 
@@ -65,10 +62,10 @@ class Dump:
             print(f"C: {context}")
 
         input_ids = self.tokenizer(question, truncation=True, max_length=512, return_tensors="pt")
-        last_hidden_state_left = self.model_1(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
-        last_hidden_state_right = self.model_2(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
-        S_start, I_start = self.index.search(last_hidden_state_left, k)
-        S_end, I_end = self.index.search(last_hidden_state_right, k)
+        last_hidden_state_start = self.model_1(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
+        last_hidden_state_end = self.model_2(**input_ids).last_hidden_state.detach().numpy()[0][0].reshape((1, self.hidden_dim))
+        S_start, I_start = self.index.search(last_hidden_state_start, k)
+        S_end, I_end = self.index.search(last_hidden_state_end, k)
         
         
         
@@ -77,15 +74,17 @@ class Dump:
             for s_end, token_w_id_end in zip(S_end[0], I_end[0]):
                 context_id_candidate_start = self.token_w_id2context_id[token_w_id_start]
                 context_id_candidate_end = self.token_w_id2context_id[token_w_id_end]
+                print(context_id_candidate_start, context_id_candidate_end)
                 if context_id_candidate_start == context_id_candidate_end:
                     
+                    print()
                     token_id_start = self.token_w_id2token_id[token_w_id_start]
                     token_id_end = self.token_w_id2token_id[token_w_id_end]
                     
                     context = self.ds.contexts[self.context_id2id[context_id_candidate_start]]
                     context_ids = self.tokenizer(context)['input_ids']
                     
-                    if token_id_start in context_ids and end_index in context_ids:
+                    if token_id_start in context_ids and token_id_end in context_ids:
                         start_index = context_ids.index(token_id_start)
                         end_index = context_ids.index(token_id_end)
                         if start_index <= end_index:
