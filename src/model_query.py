@@ -30,12 +30,13 @@ class QueryModel(torch.nn.Module):
         self.model_end = dump.model_end
 
         self.H = torch.Tensor(dump.H).to(device)
-        self.H.requires_grad = False
         
         self.ds = ds
         self.L = L
         self.device = device
         self.k = 100
+        self.penality = torch.Tensor([10e5])
+        self.penality.requires_grad = True
 
     def forward(self, ids):
         N = len(ids)                    
@@ -44,12 +45,10 @@ class QueryModel(torch.nn.Module):
         input_ids = self.tokenizer(questions, truncation=True, max_length=512, padding=True, return_tensors="pt").to(self.device)
         last_hidden_state_start = self.model_start(**input_ids).last_hidden_state[:, 0, :]
         last_hidden_state_end = self.model_end(**input_ids).last_hidden_state[:, 0, :]
-        print(last_hidden_state_start)
-
         dot_start = torch.matmul(self.H, last_hidden_state_start.T).T
         dot_end = torch.matmul(self.H, last_hidden_state_end.T).T
 
-
+        loss = torch.Tensor([0.]).to(self.device)
         for n in range(N):
 
 
@@ -58,7 +57,7 @@ class QueryModel(torch.nn.Module):
 
             S_start = dot_start[n][I_start]
             S_end = dot_end[n][I_end]
-            loss = torch.Tensor([0.]).to(self.device)
+            
 
             answer_candidate2cumscore = {}
             answer_2cumscore = {}
@@ -90,18 +89,16 @@ class QueryModel(torch.nn.Module):
                                 
                                 answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end   
             # print(answer_2cumscore)
-
-            if answer_2cumscore:
+            
+            if answer_candidate2cumscore and answer_2cumscore:
+                
                 scores_numenator = torch.vstack(tuple(answer_2cumscore.values()))
-            else:
-                scores_numenator = torch.Tensor([0.], )
-            if answer_candidate2cumscore:
                 scores_denominator = torch.vstack(tuple(answer_candidate2cumscore.values()))
+                numenator = torch.sum(torch.exp(scores_numenator))
+                denominator = torch.sum(torch.exp(scores_denominator))
+                loss += - torch.log(numenator / denominator)
             else:
-                scores_denominator = torch.Tensor([0.])
-            numenator = torch.sum(torch.exp(scores_numenator))
-            denominator = torch.sum(torch.exp(scores_denominator))
-            loss += - torch.log(numenator / denominator)
+                loss -= self.penality
                 
         return loss
 
@@ -116,8 +113,8 @@ class QueryModel(torch.nn.Module):
         input_ids = self.tokenizer(questions, truncation=True, max_length=512, padding=True, return_tensors="pt").to(self.device)
         last_hidden_state_start = self.model_start(**input_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
         last_hidden_state_end = self.model_end(**input_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
-        S_start, I_start = self.dump.index.search(last_hidden_state_start, k)
-        S_end, I_end = self.dump.index.search(last_hidden_state_end, k)
+        S_start, I_start = self.dump.index.search(np.ascontiguousarray(last_hidden_state_start), k)
+        S_end, I_end = self.dump.index.search(np.ascontiguousarray(last_hidden_state_end), k)
         
         
         answers, start_indices, end_indices, scores = [], [], [], []
@@ -142,7 +139,6 @@ class QueryModel(torch.nn.Module):
                                 answer_candidate_ids = context_ids[start_index:end_index]
                                 answer_candidate = self.tokenizer.decode(answer_candidate_ids)
                                 answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
-                                
                         
             if answer_candidate2cumscore:
                 answer, score = sorted(answer_candidate2cumscore.items(), key=lambda x: -x[1])[0]
@@ -151,4 +147,5 @@ class QueryModel(torch.nn.Module):
                 start_indices.append(start_index)
                 end_indices.append(end_index)
                 scores.append(score)
+                
         return answers, start_indices, end_indices, scores
