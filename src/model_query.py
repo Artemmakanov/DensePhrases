@@ -26,10 +26,16 @@ class QueryModel(torch.nn.Module):
         self.tokenizer = tokenizer
         
         self.dump = dump
+        for param in self.dump.parameters():
+            param.requires_grad = False
+            
+            
         self.myparameters = torch.nn.ParameterList()
         self.myparameters.extend([dump.model_start, dump.model_end])
 
         self.H = torch.Tensor(dump.H).to(device)
+        self.H.requires_grad = False
+        
         self.ds = ds
         self.L = L
         self.device = device
