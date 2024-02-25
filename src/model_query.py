@@ -26,12 +26,8 @@ class QueryModel(torch.nn.Module):
         self.tokenizer = tokenizer
         
         self.dump = dump
-        for param in self.dump.parameters():
-            param.requires_grad = False
-            
-            
-        self.myparameters = torch.nn.ParameterList()
-        self.myparameters.extend([dump.model_start, dump.model_end])
+        self.model_start = dump.model_start
+        self.model_end = dump.model_end
 
         self.H = torch.Tensor(dump.H).to(device)
         self.H.requires_grad = False
@@ -46,8 +42,9 @@ class QueryModel(torch.nn.Module):
         questions = self.ds.get_questions(ids)
         
         input_ids = self.tokenizer(questions, truncation=True, max_length=512, padding=True, return_tensors="pt").to(self.device)
-        last_hidden_state_start = self.dump.model_start(**input_ids).last_hidden_state[:, 0, :]
-        last_hidden_state_end = self.dump.model_end(**input_ids).last_hidden_state[:, 0, :]
+        last_hidden_state_start = self.model_start(**input_ids).last_hidden_state[:, 0, :]
+        last_hidden_state_end = self.model_end(**input_ids).last_hidden_state[:, 0, :]
+        print(last_hidden_state_start)
 
         dot_start = torch.matmul(self.H, last_hidden_state_start.T).T
         dot_end = torch.matmul(self.H, last_hidden_state_end.T).T
