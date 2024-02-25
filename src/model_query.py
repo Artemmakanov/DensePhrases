@@ -35,7 +35,7 @@ class QueryModel(torch.nn.Module):
         self.L = L
         self.device = device
         self.k = 100
-        self.penality = torch.Tensor([10e5])
+        self.penality = torch.Tensor([10e5]).to(device)
         self.penality.requires_grad = True
 
     def forward(self, ids):
@@ -147,5 +147,11 @@ class QueryModel(torch.nn.Module):
                 start_indices.append(start_index)
                 end_indices.append(end_index)
                 scores.append(score)
+            else:
+                answers.append('')
+                start_indices.append(-1)
+                end_indices.append(-1)
+                scores.append(-1000)
+                    
                 
         return answers, start_indices, end_indices, scores
