@@ -12,7 +12,8 @@ class Dataset_QA(Dataset):
         contexts,
         questions,
         answers,
-        size
+        size,
+        device='cpu'
     ):
         self.tokenizer = tokenizer
         self.ids = []
@@ -58,29 +59,30 @@ class Dataset_QA(Dataset):
            
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.device = device
     
     def __getitem__(self, idx):
-        inputs_context = self.tokenizer.encode(
-            self.context[idx], 
+        inputs_context = self.tokenizer(
+            self.contexts[idx], 
             padding='max_length', 
             truncation=True, 
             max_length=self.max_length, 
             return_tensors='pt'
-        )
+        ).to(self.device)
 
-        inputs_question = self.tokenizer.encode(
-            self.question[idx], 
+        inputs_question = self.tokenizer(
+            self.questions[idx], 
             padding='max_length', 
             truncation=True, 
             max_length=self.max_length, 
             return_tensors='pt'
-        )
+        ).to(self.device)
 
         return {'context_ids': inputs_context,
                 'question_ids': inputs_question,
-                'span_input_start_ids': self.spans_input_ids[idx]['start'],
-                'span_input_end_ids': self.spans_input_ids[idx]['ends']
+                'start_token_indices': self.spans_input_ids[idx]['start'],
+                'end_token_indices': self.spans_input_ids[idx]['end']
                }
         
     def __len__(self):
-        return len(self.context)
+        return len(self.contexts)

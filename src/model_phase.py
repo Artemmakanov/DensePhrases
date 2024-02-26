@@ -26,10 +26,11 @@ class PhraseModel(torch.nn.Module):
 
     def forward(
         self,
-        context_ids,
-        question_ids,
-        start_token_indices,
-        end_token_indices
+        context_ids: torch.Tensor,
+        question_ids: torch.Tensor,
+        start_token_indices: List[int],
+        end_token_indices: List[int],
+        **kwargs
     ):
 
         last_hidden_state = self.model(**context_ids).last_hidden_state[1:-1]
@@ -37,15 +38,10 @@ class PhraseModel(torch.nn.Module):
         N, context_num_tokens, _ = last_hidden_state.shape
         q_start = self.model_start(**question_ids).last_hidden_state[:, 0]
         q_end = self.model_end(**question_ids).last_hidden_state[:, 0]
-        # start_token_indices = self.dataset.get_spans_input_ids(ids, pos='start')
-        # end_token_indices = self.dataset.get_spans_input_ids(ids, pos='end')
+  
         loss = torch.Tensor([0.]).to(self.device)
-        # print(f"context_num_tokens {context_num_tokens}")
-        # print(f"last_hidden_state.shape {last_hidden_state.shape}")
-        # print(f"q_start.shape {q_start.shape}")
-        # print(f"q_end.shape {q_end.shape}")
-        # print(f"start_token_indices {start_token_indices}")
-        # print(f"end_token_indices {end_token_indices}")
+        loss.requires_grad = True
+
         for n in range(N):
             
             z_start = torch.matmul(last_hidden_state[n], q_start[n].T).reshape(context_num_tokens)
