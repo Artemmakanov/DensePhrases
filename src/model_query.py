@@ -17,12 +17,14 @@ class QueryModel(torch.nn.Module):
         hidden_dim,
         dump,
         L=30,
-        device='cpu'
+        device='cpu',
+        k=10,
+        p=0.3
     ):
         super(QueryModel, self).__init__()
 
         self.hidden_dim = hidden_dim
-        
+        self.p = p
         self.tokenizer = tokenizer
         
         self.dump = dump
@@ -34,7 +36,7 @@ class QueryModel(torch.nn.Module):
         self.dataset = dump.dataset
         self.L = L
         self.device = device
-        self.k = 100
+        self.k = k
         self.penality = torch.Tensor([10e5]).to(device)
         self.penality.requires_grad = True
 
@@ -46,8 +48,7 @@ class QueryModel(torch.nn.Module):
         dot_start = torch.matmul(self.H, last_hidden_state_start.T).T
         dot_end = torch.matmul(self.H, last_hidden_state_end.T).T
         N, _ = dot_start.shape
-        # print(dot_start.shape)
-        # print(dot_end.shape)
+ 
         
         loss = torch.Tensor([0.]).to(self.device)
         for n in range(N):
@@ -83,8 +84,8 @@ class QueryModel(torch.nn.Module):
                             answer_candidate_ids = context_ids[start_index:end_index]
                             answer_candidate = self.tokenizer.decode(answer_candidate_ids)
                             if start_index <= end_index <= start_index + self.L:
-                                if abs(start_index - self.dataset.spans_input_ids[idx]['start']) / len(context_ids) < 0.5 and \
-                                    abs(end_index - self.dataset.spans_input_ids[idx]['end']) / len(context_ids) < 0.5:
+                                if abs(start_index - self.dataset.spans_input_ids[idx]['start']) / len(context_ids) < self.p and \
+                                    abs(end_index - self.dataset.spans_input_ids[idx]['end']) / len(context_ids) < self.p:
                                     answer_2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
                                 
                                 answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end   
@@ -94,11 +95,16 @@ class QueryModel(torch.nn.Module):
                 
                 scores_numenator = torch.vstack(tuple(answer_2cumscore.values()))
                 scores_denominator = torch.vstack(tuple(answer_candidate2cumscore.values()))
+                scores_all = torch.vstack((scores_numenator, scores_denominator))
+
+                scores_numenator = scores_numenator - torch.max(scores_all)
+                scores_denominator = scores_denominator - torch.max(scores_all)
                 numenator = torch.sum(torch.exp(scores_numenator))
                 denominator = torch.sum(torch.exp(scores_denominator))
+
                 loss += - torch.log(numenator / denominator)
             else:
-                loss -= self.penality
+                loss += self.penality
                 
         return loss
 
@@ -159,7 +165,7 @@ class QueryModel(torch.nn.Module):
                 answers.append('')
                 start_indices.append(-1)
                 end_indices.append(-1)
-                scores.append(-1000)
+                scores.append(-100)
                     
                 
         return answers, start_indices, end_indices, scores
