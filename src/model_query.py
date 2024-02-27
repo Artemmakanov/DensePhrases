@@ -108,11 +108,12 @@ class QueryModel(torch.nn.Module):
         question_ids: torch.Tensor,
         k: int = 100, 
         verbose: bool = False,
-        L: int = 30
+        L: int = 30,
+        **kwargs
     ):
-        N = len(question_ids)
-        questions = [self.dataset.questions(id) for id in indices]
-        contexts = [self.dataset.contexts(id) for id in indices]
+        
+        questions = [self.dataset.questions[id] for id in indices]
+        contexts = [self.dataset.contexts[id] for id in indices]
         if verbose:
             print(f"Q: {questions}")
             print(f"C: {contexts}")
@@ -121,7 +122,7 @@ class QueryModel(torch.nn.Module):
         last_hidden_state_end = self.model_end(**question_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
         S_start, I_start = self.dump.index.search(np.ascontiguousarray(last_hidden_state_start), k)
         S_end, I_end = self.dump.index.search(np.ascontiguousarray(last_hidden_state_end), k)
-        
+        N, _ = last_hidden_state_end.shape
         
         answers, start_indices, end_indices, scores = [], [], [], []
         for n in range(N):
