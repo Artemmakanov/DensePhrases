@@ -63,12 +63,13 @@ class QueryModel(torch.nn.Module):
             S_end = dot_end[n][I_end]
             
 
-            answer_candidate2cumscore = {}
-            answer_2cumscore = {}
+            candidate_cumscores = []
+            cumscores = []
             for s_start, token_w_id_start in zip(S_start, I_start):
                 for s_end, token_w_id_end in zip(S_end, I_end):
                     context_id_candidate_start = self.dump.token_w_id2context_id[token_w_id_start]
                     context_id_candidate_end = self.dump.token_w_id2context_id[token_w_id_end]
+                    candidate_cumscores.append((s_start + s_end) / self.hidden_dim)
                     if context_id_candidate_start == context_id_candidate_end:
                         
                         token_id_start = self.dump.token_w_id2token_id[token_w_id_start]
@@ -84,19 +85,22 @@ class QueryModel(torch.nn.Module):
                             start_index = context_ids.index(token_id_start)
                             end_index = context_ids.index(token_id_end)
                             answer_candidate_ids = context_ids[start_index:end_index]
-                            answer_candidate = self.tokenizer.decode(answer_candidate_ids)
                             if start_index <= end_index <= start_index + self.L:
-                                if abs(start_index - self.dataset.spans_input_ids[idx]['start']) / len(context_ids) < self.p and \
-                                    abs(end_index - self.dataset.spans_input_ids[idx]['end']) / len(context_ids) < self.p \
-                                    or self.strict:
-                                    answer_2cumscore[(start_index, end_index, answer_candidate)] = (s_start + s_end) / self.hidden_dim 
-                                
-                                answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = (s_start + s_end) / self.hidden_dim   
+                                if not self.strict:
+                                  if abs(start_index - self.dataset.spans_input_ids[idx]['start']) / len(context_ids) < self.p and \
+                                      abs(end_index - self.dataset.spans_input_ids[idx]['end']) / len(context_ids) < self.p:
+                                    cumscores.append((s_start + s_end) / self.hidden_dim )
+                                else:
+                                  if start_index == self.dataset.spans_input_ids[idx]['start'] and \
+                                    end_index == self.dataset.spans_input_ids[idx]['end']:
+                                    cumscores.append((s_start + s_end) / self.hidden_dim )
+                                    
+                      
             # print(answer_2cumscore)
             
-            if answer_candidate2cumscore and answer_2cumscore:
-                scores_numenator = torch.vstack(tuple(answer_2cumscore.values()))
-                scores_denominator = torch.vstack(tuple(answer_candidate2cumscore.values()))
+            if candidate_cumscores and cumscores:
+                scores_numenator = torch.vstack(tuple(cumscores))
+                scores_denominator = torch.vstack(tuple(candidate_cumscores))
                 print(len(scores_numenator), len(scores_denominator))
                 # print(scores_numenator, scores_denominator)
                 scores_numenator = scores_numenator - torch.max(scores_denominator)
