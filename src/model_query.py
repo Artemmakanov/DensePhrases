@@ -7,6 +7,7 @@ from transformers import AutoModel
 import torch
 import numpy as np
 import re
+from typing import List
 
 
 class QueryModel(torch.nn.Module):
@@ -15,7 +16,6 @@ class QueryModel(torch.nn.Module):
         tokenizer,
         hidden_dim,
         dump,
-        ds,
         L=30,
         device='cpu'
     ):
@@ -31,27 +31,28 @@ class QueryModel(torch.nn.Module):
 
         self.H = torch.Tensor(dump.H).to(device)
         
-        self.ds = ds
+        self.dataset = dump.dataset
         self.L = L
         self.device = device
         self.k = 100
         self.penality = torch.Tensor([10e5]).to(device)
         self.penality.requires_grad = True
 
-    def forward(self, ids):
-        N = len(ids)                    
-        questions = self.ds.get_questions(ids)
+    def forward(self, question_ids: torch.Tensor, **kwargs):
+                            
         
-        input_ids = self.tokenizer(questions, truncation=True, max_length=512, padding=True, return_tensors="pt").to(self.device)
-        last_hidden_state_start = self.model_start(**input_ids).last_hidden_state[:, 0, :]
-        last_hidden_state_end = self.model_end(**input_ids).last_hidden_state[:, 0, :]
+        last_hidden_state_start = self.model_start(**question_ids).last_hidden_state[:, 0, :]
+        last_hidden_state_end = self.model_end(**question_ids).last_hidden_state[:, 0, :]
         dot_start = torch.matmul(self.H, last_hidden_state_start.T).T
         dot_end = torch.matmul(self.H, last_hidden_state_end.T).T
-
+        N, _ = dot_start.shape
+        # print(dot_start.shape)
+        # print(dot_end.shape)
+        
         loss = torch.Tensor([0.]).to(self.device)
         for n in range(N):
 
-
+            
             I_start = np.argsort(-dot_start[n].cpu().detach().numpy())[:self.k]
             I_end = np.argsort(-dot_end[n].cpu().detach().numpy())[:self.k]
 
@@ -70,10 +71,9 @@ class QueryModel(torch.nn.Module):
                         token_id_start = self.dump.token_w_id2token_id[token_w_id_start]
                         token_id_end = self.dump.token_w_id2token_id[token_w_id_end]
                         
-                        answer_id = self.dump.context_id2id[context_id_candidate_start]
-                        context = self.ds.contexts[answer_id]
+                        idx = self.dump.context_id2id[context_id_candidate_start]
+                        context = self.dataset.contexts[idx]
                         context_ids = self.tokenizer(context)['input_ids']
-                        
                         
                                 
                         if token_id_start in context_ids and token_id_end in context_ids:
@@ -83,8 +83,8 @@ class QueryModel(torch.nn.Module):
                             answer_candidate_ids = context_ids[start_index:end_index]
                             answer_candidate = self.tokenizer.decode(answer_candidate_ids)
                             if start_index <= end_index <= start_index + self.L:
-                                if abs(start_index - self.ds.spans_input_ids[answer_id]['start']) / len(context_ids) < 0.5 and \
-                                    abs(end_index - self.ds.spans_input_ids[answer_id]['end']) / len(context_ids) < 0.5:
+                                if abs(start_index - self.dataset.spans_input_ids[idx]['start']) / len(context_ids) < 0.5 and \
+                                    abs(end_index - self.dataset.spans_input_ids[idx]['end']) / len(context_ids) < 0.5:
                                     answer_2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
                                 
                                 answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end   
@@ -102,17 +102,23 @@ class QueryModel(torch.nn.Module):
                 
         return loss
 
-    def predict(self, ids, k=100, verbose=False, L=30):
-        N = len(ids)
-        questions = self.ds.get_questions(ids)
-        contexts = self.ds.get_contexts(ids)
+    def predict(
+        self,
+        indices: List[int],
+        question_ids: torch.Tensor,
+        k: int = 100, 
+        verbose: bool = False,
+        L: int = 30
+    ):
+        N = len(question_ids)
+        questions = [self.dataset.questions(id) for id in indices]
+        contexts = [self.dataset.contexts(id) for id in indices]
         if verbose:
             print(f"Q: {questions}")
             print(f"C: {contexts}")
 
-        input_ids = self.tokenizer(questions, truncation=True, max_length=512, padding=True, return_tensors="pt").to(self.device)
-        last_hidden_state_start = self.model_start(**input_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
-        last_hidden_state_end = self.model_end(**input_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
+        last_hidden_state_start = self.model_start(**question_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
+        last_hidden_state_end = self.model_end(**question_ids).last_hidden_state.detach().cpu().numpy()[:, 0, :].reshape((N, self.hidden_dim))
         S_start, I_start = self.dump.index.search(np.ascontiguousarray(last_hidden_state_start), k)
         S_end, I_end = self.dump.index.search(np.ascontiguousarray(last_hidden_state_end), k)
         
@@ -129,7 +135,7 @@ class QueryModel(torch.nn.Module):
                         token_id_start = self.dump.token_w_id2token_id[token_w_id_start]
                         token_id_end = self.dump.token_w_id2token_id[token_w_id_end]
                         
-                        context = self.ds.contexts[self.dump.context_id2id[context_id_candidate_start]]
+                        context = self.dataset.contexts[self.dump.context_id2id[context_id_candidate_start]]
                         context_ids = self.tokenizer(context)['input_ids']
                         
                         if token_id_start in context_ids and token_id_end in context_ids:

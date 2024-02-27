@@ -79,7 +79,9 @@ class Dataset_QA(Dataset):
             return_tensors='pt'
         )).to(self.device)
 
-        return {'context_ids': inputs_context,
+        return {
+                'indices': idx,
+                'context_ids': inputs_context,
                 'question_ids': inputs_question,
                 'start_token_indices': self.spans_input_ids[idx]['start'],
                 'end_token_indices': self.spans_input_ids[idx]['end']
