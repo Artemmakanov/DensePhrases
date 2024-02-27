@@ -33,14 +33,13 @@ class PhraseModel(torch.nn.Module):
         **kwargs
     ):
 
-        last_hidden_state = self.model(**context_ids).last_hidden_state[1:-1]
+        last_hidden_state = self.model(**context_ids).last_hidden_state[:, 1:-1, :]
         
         N, context_num_tokens, _ = last_hidden_state.shape
-        q_start = self.model_start(**question_ids).last_hidden_state[:, 0]
-        q_end = self.model_end(**question_ids).last_hidden_state[:, 0]
+        q_start = self.model_start(**question_ids).last_hidden_state[:, 0, :]
+        q_end = self.model_end(**question_ids).last_hidden_state[:, 0, :]
   
-        loss = torch.Tensor([0.]).to(self.device)
-        loss.requires_grad = True
+        loss = torch.tensor([0.], requires_grad=True).to(self.device)
 
         for n in range(N):
             
@@ -52,6 +51,6 @@ class PhraseModel(torch.nn.Module):
             P_end = self.softmax(z_end)
             loss_end = torch.log(P_end[end_token_indices[n]])
             
-            loss += (loss_start + loss_end) / 2
-
+            loss = loss + (loss_start + loss_end) / 2
+            
         return -loss

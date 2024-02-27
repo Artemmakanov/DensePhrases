@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+
+from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 class Dataset_QA(Dataset):
@@ -62,21 +63,21 @@ class Dataset_QA(Dataset):
         self.device = device
     
     def __getitem__(self, idx):
-        inputs_context = self.tokenizer(
+        inputs_context = squeeze_dict(self.tokenizer(
             self.contexts[idx], 
             padding='max_length', 
             truncation=True, 
             max_length=self.max_length, 
             return_tensors='pt'
-        ).to(self.device)
+        )).to(self.device)
 
-        inputs_question = self.tokenizer(
+        inputs_question = squeeze_dict(self.tokenizer(
             self.questions[idx], 
             padding='max_length', 
             truncation=True, 
             max_length=self.max_length, 
             return_tensors='pt'
-        ).to(self.device)
+        )).to(self.device)
 
         return {'context_ids': inputs_context,
                 'question_ids': inputs_question,
@@ -84,5 +85,13 @@ class Dataset_QA(Dataset):
                 'end_token_indices': self.spans_input_ids[idx]['end']
                }
         
+    def as_data_loader(self, batch_size=10):
+        return DataLoader(self, batch_size=batch_size, shuffle=True)
+    
     def __len__(self):
         return len(self.contexts)
+    
+def squeeze_dict(dct):
+    for k, w in dct.items():
+        dct[k] = w[0]
+    return dct

@@ -13,13 +13,13 @@ import re
 
 
 class Dump:
-    def __init__(self, ds, model, model_start, model_end, tokenizer, hidden_dim=768, device='cuda'):
+    def __init__(self, dataset, model, model_start, model_end, tokenizer, hidden_dim=768, device='cuda'):
         self.hidden_dim = hidden_dim
         self.tokenizer = tokenizer
         self.model = model
         self.model_start = model_start
         self.model_end = model_end
-        self.ds = ds            
+        self.dataset = dataset            
         self.device = device
 
     def create_dump(self):
@@ -28,9 +28,9 @@ class Dump:
         self.context_id2id = {}
         token_w_id = 0
         
-        contexts_unique = list(set(self.ds.contexts))
+        contexts_unique = list(set(self.dataset.contexts))
         for context_id, context_unique in enumerate(contexts_unique):
-            self.context_id2id[context_id] = self.ds.contexts.index(context_unique)
+            self.context_id2id[context_id] = self.dataset.contexts.index(context_unique)
         
         
         for context_id, context in enumerate(tqdm(contexts_unique, desc='Creating Phrase dump')):
@@ -53,8 +53,7 @@ class Dump:
         self.index = faiss.IndexFlatIP(self.hidden_dim)
         self.index.add(H)
         self.H = H
-        size, hiiden = H.shape
-        self.size = len(self.ds.contexts)
+        self.size = len(self.dataset)
 
     
         
