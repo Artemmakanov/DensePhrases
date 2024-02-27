@@ -37,7 +37,7 @@ class QueryModel(torch.nn.Module):
         self.L = L
         self.device = device
         self.k = k
-        self.penality = torch.Tensor([10e5]).to(device)
+        self.penality = torch.Tensor([10e2]).to(device)
         self.penality.requires_grad = True
 
     def forward(self, question_ids: torch.Tensor, **kwargs):
@@ -95,10 +95,10 @@ class QueryModel(torch.nn.Module):
                 
                 scores_numenator = torch.vstack(tuple(answer_2cumscore.values()))
                 scores_denominator = torch.vstack(tuple(answer_candidate2cumscore.values()))
-                scores_all = torch.vstack((scores_numenator, scores_denominator))
+                # scores_all = torch.vstack((scores_numenator, scores_denominator))
 
-                scores_numenator = scores_numenator - torch.max(scores_all)
-                scores_denominator = scores_denominator - torch.max(scores_all)
+                scores_numenator = scores_numenator - torch.max(scores_denominator)
+                scores_denominator = scores_denominator - torch.max(scores_denominator)
                 numenator = torch.sum(torch.exp(scores_numenator))
                 denominator = torch.sum(torch.exp(scores_denominator))
 
