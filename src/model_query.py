@@ -19,12 +19,14 @@ class QueryModel(torch.nn.Module):
         L=30,
         device='cpu',
         k=10,
-        p=0.3
+        p=0.3,
+        strict=False
     ):
         super(QueryModel, self).__init__()
 
         self.hidden_dim = hidden_dim
         self.p = p
+        self.strict = strict
         self.tokenizer = tokenizer
         
         self.dump = dump
@@ -85,22 +87,25 @@ class QueryModel(torch.nn.Module):
                             answer_candidate = self.tokenizer.decode(answer_candidate_ids)
                             if start_index <= end_index <= start_index + self.L:
                                 if abs(start_index - self.dataset.spans_input_ids[idx]['start']) / len(context_ids) < self.p and \
-                                    abs(end_index - self.dataset.spans_input_ids[idx]['end']) / len(context_ids) < self.p:
-                                    answer_2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
+                                    abs(end_index - self.dataset.spans_input_ids[idx]['end']) / len(context_ids) < self.p \
+                                    or self.strict:
+                                    answer_2cumscore[(start_index, end_index, answer_candidate)] = (s_start + s_end) / self.hidden_dim 
                                 
-                                answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end   
+                                answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = (s_start + s_end) / self.hidden_dim   
             # print(answer_2cumscore)
             
             if answer_candidate2cumscore and answer_2cumscore:
-                
                 scores_numenator = torch.vstack(tuple(answer_2cumscore.values()))
                 scores_denominator = torch.vstack(tuple(answer_candidate2cumscore.values()))
-                # scores_all = torch.vstack((scores_numenator, scores_denominator))
-
+                print(len(scores_numenator), len(scores_denominator))
+                # print(scores_numenator, scores_denominator)
                 scores_numenator = scores_numenator - torch.max(scores_denominator)
                 scores_denominator = scores_denominator - torch.max(scores_denominator)
+
                 numenator = torch.sum(torch.exp(scores_numenator))
                 denominator = torch.sum(torch.exp(scores_denominator))
+
+                print(numenator, denominator)
 
                 loss += - torch.log(numenator / denominator)
             else:
@@ -152,7 +157,7 @@ class QueryModel(torch.nn.Module):
                             if start_index <= end_index <= start_index + L:
                                 answer_candidate_ids = context_ids[start_index:end_index]
                                 answer_candidate = self.tokenizer.decode(answer_candidate_ids)
-                                answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = s_start + s_end
+                                answer_candidate2cumscore[(start_index, end_index, answer_candidate)] = (s_start + s_end)  
                         
             if answer_candidate2cumscore:
                 answer, score = sorted(answer_candidate2cumscore.items(), key=lambda x: -x[1])[0]
