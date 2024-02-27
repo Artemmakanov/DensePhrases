@@ -81,6 +81,9 @@ class Dataset_QA(Dataset):
 
         return {
                 'indices': idx,
+                'contexts': self.contexts[idx],
+                'answers': self.answers[idx],
+                'questions': self.questions[idx],
                 'context_ids': inputs_context,
                 'question_ids': inputs_question,
                 'start_token_indices': self.spans_input_ids[idx]['start'],
